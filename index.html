@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Esri + NVIDIA Integration Explorer</title>
+
+  <!-- ArcGIS Maps SDK 5.0 (unified: Core + Calcite + all components) -->
+  <script type="module" src="https://js.arcgis.com/5.0/"></script>
+  <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/dark/main.css" />
+
+  <style>
+    :root {
+      --nvidia-green: #76b900;
+      --esri-blue: #0079c1;
+      --card-bg: #1a1a2e;
+      --card-hover: #16213e;
+      --surface: #0f0f1a;
+      --text-primary: #e8e8e8;
+      --text-secondary: #a0a0b0;
+      --status-production: #76b900;
+      --status-emerging: #f5a623;
+      --status-transitioning: #e07c24;
+      --status-active: #4fc3f7;
+      --status-informal: #ab47bc;
+      --status-ongoing: #78909c;
+      --status-ecosystem: #8d6e63;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: "Avenir Next", "Helvetica Neue", sans-serif;
+      background: var(--surface);
+      color: var(--text-primary);
+    }
+
+    calcite-shell {
+      --calcite-color-brand: var(--nvidia-green);
+    }
+
+    /* Header */
+    .app-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      height: 56px;
+      background: linear-gradient(135deg, #0a0a14 0%, #1a1a2e 100%);
+      border-bottom: 2px solid var(--nvidia-green);
+    }
+
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .header-brand h1 {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 0;
+      background: linear-gradient(90deg, var(--esri-blue), var(--nvidia-green));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-logos {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .brand-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .dot-esri { background: var(--esri-blue); }
+    .dot-nvidia { background: var(--nvidia-green); }
+
+    .header-stats {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .stat-badge {
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(118, 185, 0, 0.15);
+      color: var(--nvidia-green);
+      border: 1px solid rgba(118, 185, 0, 0.3);
+    }
+
+    /* Map */
+    #viewDiv {
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+    }
+
+    /* Side panel */
+    .panel-content {
+      padding: 0;
+    }
+
+    /* Filter bar */
+    .filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 12px;
+      background: var(--surface);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .filter-chip {
+      padding: 4px 12px;
+      border-radius: 16px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: transparent;
+      color: var(--text-secondary);
+      transition: all 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .filter-chip:hover {
+      border-color: var(--nvidia-green);
+      color: var(--nvidia-green);
+    }
+
+    .filter-chip.active {
+      background: rgba(118, 185, 0, 0.2);
+      border-color: var(--nvidia-green);
+      color: var(--nvidia-green);
+    }
+
+    /* Search */
+    .search-box {
+      padding: 12px;
+      background: var(--surface);
+    }
+
+    .search-box input {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.05);
+      color: var(--text-primary);
+      font-size: 13px;
+      outline: none;
+      box-sizing: border-box;
+      transition: border-color 0.2s;
+    }
+
+    .search-box input:focus {
+      border-color: var(--nvidia-green);
+    }
+
+    .search-box input::placeholder {
+      color: var(--text-secondary);
+    }
+
+    /* Integration cards list */
+    .cards-container {
+      overflow-y: auto;
+      flex: 1;
+      padding: 8px 12px;
+    }
+
+    .integration-card {
+      background: var(--card-bg);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .integration-card::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      border-radius: 3px 0 0 3px;
+    }
+
+    .integration-card:hover {
+      background: var(--card-hover);
+      border-color: rgba(118, 185, 0, 0.3);
+      transform: translateX(4px);
+    }
+
+    .integration-card.selected {
+      border-color: var(--nvidia-green);
+      background: var(--card-hover);
+      box-shadow: 0 0 20px rgba(118, 185, 0, 0.1);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 8px;
+    }
+
+    .card-number {
+      font-size: 11px;
+      color: var(--text-secondary);
+      font-weight: 700;
+      min-width: 24px;
+    }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      flex: 1;
+      line-height: 1.3;
+    }
+
+    .card-status {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+      margin-left: 8px;
+    }
+
+    .status-production { background: rgba(118,185,0,0.15); color: var(--status-production); }
+    .status-emerging { background: rgba(245,166,35,0.15); color: var(--status-emerging); }
+    .status-transitioning { background: rgba(224,124,36,0.15); color: var(--status-transitioning); }
+    .status-active { background: rgba(79,195,247,0.15); color: var(--status-active); }
+    .status-informal { background: rgba(171,71,188,0.15); color: var(--status-informal); }
+    .status-ongoing { background: rgba(120,144,156,0.15); color: var(--status-ongoing); }
+    .status-ecosystem { background: rgba(141,110,99,0.15); color: var(--status-ecosystem); }
+
+    .card-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .card-meta-row {
+      display: flex;
+      gap: 6px;
+      align-items: baseline;
+    }
+
+    .meta-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-secondary);
+      min-width: 52px;
+      font-weight: 600;
+    }
+
+    .meta-value {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+
+    .meta-esri { color: #4da8e8; }
+    .meta-nvidia { color: #9ad034; }
+
+    /* Detail panel (right) */
+    .detail-panel {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .detail-hero {
+      padding: 24px 20px;
+      background: linear-gradient(180deg, rgba(118,185,0,0.08) 0%, transparent 100%);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .detail-hero .detail-number {
+      font-size: 48px;
+      font-weight: 800;
+      color: rgba(118,185,0,0.2);
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .detail-hero h2 {
+      font-size: 20px;
+      font-weight: 700;
+      margin: 0 0 12px;
+      color: var(--text-primary);
+    }
+
+    .detail-hero .detail-status {
+      display: inline-block;
+      padding: 4px 14px;
+      border-radius: 14px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .detail-body {
+      padding: 20px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .detail-section {
+      margin-bottom: 20px;
+    }
+
+    .detail-section h3 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-secondary);
+      margin: 0 0 10px;
+      font-weight: 700;
+    }
+
+    .detail-section p {
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text-primary);
+      margin: 0;
+    }
+
+    .tech-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .tech-tag {
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .tech-tag.esri {
+      background: rgba(0,121,193,0.15);
+      color: #4da8e8;
+      border: 1px solid rgba(0,121,193,0.25);
+    }
+
+    .tech-tag.nvidia {
+      background: rgba(118,185,0,0.12);
+      color: #9ad034;
+      border: 1px solid rgba(118,185,0,0.25);
+    }
+
+    /* Architecture diagram in detail */
+    .arch-flow {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.06);
+      flex-wrap: wrap;
+    }
+
+    .arch-node {
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .arch-node.esri-node {
+      background: rgba(0,121,193,0.2);
+      border: 1px solid rgba(0,121,193,0.4);
+      color: #4da8e8;
+    }
+
+    .arch-node.nvidia-node {
+      background: rgba(118,185,0,0.15);
+      border: 1px solid rgba(118,185,0,0.3);
+      color: #9ad034;
+    }
+
+    .arch-arrow {
+      color: var(--text-secondary);
+      font-size: 16px;
+    }
+
+    /* Map popup custom */
+    .popup-content {
+      font-family: "Avenir Next", sans-serif;
+    }
+
+    /* Empty state */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-secondary);
+      padding: 40px 20px;
+      text-align: center;
+    }
+
+    .empty-state .empty-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.3;
+    }
+
+    .empty-state p {
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    /* Responsive adjustments */
+    calcite-shell-panel {
+      --calcite-shell-panel-width: 380px;
+    }
+
+    /* Map overlay info */
+    .map-overlay-legend {
+      position: absolute;
+      bottom: 24px;
+      left: 12px;
+      background: rgba(15,15,26,0.9);
+      backdrop-filter: blur(10px);
+      padding: 12px 16px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.1);
+      z-index: 10;
+    }
+
+    .legend-title {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+
+    .legend-items {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    /* Keyboard nav indicator */
+    .nav-hint {
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.03);
+      border-top: 1px solid rgba(255,255,255,0.06);
+      font-size: 11px;
+      color: var(--text-secondary);
+      text-align: center;
+    }
+
+    .nav-hint kbd {
+      background: rgba(255,255,255,0.1);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-family: monospace;
+    }
+  </style>
+</head>
+
+<body class="calcite-mode-dark">
+  <calcite-shell>
+
+    <!-- HEADER -->
+    <calcite-navigation slot="header">
+      <div class="app-header" slot="content-start">
+        <div class="header-brand">
+          <div class="brand-logos">
+            <span class="brand-dot dot-esri"></span> Esri
+            <span style="color:rgba(255,255,255,0.2);">&times;</span>
+            <span class="brand-dot dot-nvidia"></span> NVIDIA
+          </div>
+          <h1>Integration Explorer</h1>
+        </div>
+        <div class="header-stats">
+          <span class="stat-badge" id="countBadge">20 Integrations</span>
+        </div>
+      </div>
+    </calcite-navigation>
+
+    <!-- LEFT PANEL: Integration List -->
+    <calcite-shell-panel slot="panel-start" position="start">
+      <calcite-panel heading="Integrations" description="Browse all Esri + NVIDIA touchpoints">
+        <div class="panel-content" style="display:flex;flex-direction:column;height:100%;">
+
+          <!-- Search -->
+          <div class="search-box">
+            <input type="text" id="searchInput" placeholder="Search integrations..." />
+          </div>
+
+          <!-- Filter chips -->
+          <div class="filter-bar" id="filterBar">
+            <button class="filter-chip active" data-filter="all">All</button>
+            <button class="filter-chip" data-filter="production">Production</button>
+            <button class="filter-chip" data-filter="active">Active</button>
+            <button class="filter-chip" data-filter="emerging">Emerging</button>
+            <button class="filter-chip" data-filter="transitioning">Transitioning</button>
+            <button class="filter-chip" data-filter="informal">Informal</button>
+            <button class="filter-chip" data-filter="ongoing">Ongoing</button>
+            <button class="filter-chip" data-filter="ecosystem">Ecosystem</button>
+          </div>
+
+          <!-- Cards -->
+          <div class="cards-container" id="cardsContainer"></div>
+
+          <!-- Nav hint -->
+          <div class="nav-hint">
+            <kbd>&uarr;</kbd> <kbd>&darr;</kbd> Navigate &nbsp; <kbd>Enter</kbd> Select
+          </div>
+        </div>
+      </calcite-panel>
+    </calcite-shell-panel>
+
+    <!-- MAP -->
+    <div id="viewDiv"></div>
+
+    <!-- RIGHT PANEL: Detail View -->
+    <calcite-shell-panel slot="panel-end" position="end">
+      <calcite-panel heading="Details" id="detailPanel">
+        <div id="detailContent">
+          <div class="empty-state">
+            <div class="empty-icon">&#9881;</div>
+            <p>Select an integration from the list or click a point on the map to view details.</p>
+          </div>
+        </div>
+      </calcite-panel>
+    </calcite-shell-panel>
+
+  </calcite-shell>
+
+  <script type="module">
+    // ──────────────────────────────────────────────
+    // DATA: All 20 Esri × NVIDIA Integrations
+    // ──────────────────────────────────────────────
+    const integrations = [
+      {
+        id: 1,
+        title: "ArcGIS Pro (Deep Learning)",
+        esri: "ArcGIS Pro, Image Analyst",
+        nvidia: "CUDA, cuDNN, PyTorch GPU",
+        useCase: "Object detection, classification, pixel segmentation from imagery and point clouds. ArcGIS Pro bundles 254+ deep learning packages and leverages NVIDIA GPUs for training and inference of geospatial AI models.",
+        status: "Production",
+        category: "AI / Deep Learning",
+        location: { lat: 34.0522, lon: -118.2437 }, // Redlands/LA area
+        flow: [
+          { label: "ArcGIS Pro", type: "esri" },
+          { label: "Image Analyst", type: "esri" },
+          { label: "CUDA / cuDNN", type: "nvidia" },
+          { label: "PyTorch GPU", type: "nvidia" }
+        ]
+      },
+      {
+        id: 2,
+        title: "ArcGIS Pro (Spatial Analyst)",
+        esri: "ArcGIS Pro, Spatial Analyst Extension",
+        nvidia: "CUDA compute",
+        useCase: "GPU-accelerated raster analysis including viewshed, slope, aspect, and solar radiation. Processing tasks are divided into small portions computed in parallel on the GPU for dramatic speedups.",
+        status: "Production",
+        category: "Spatial Analysis",
+        location: { lat: 34.0195, lon: -117.3798 },
+        flow: [
+          { label: "Spatial Analyst", type: "esri" },
+          { label: "Raster Tools", type: "esri" },
+          { label: "CUDA Compute", type: "nvidia" }
+        ]
+      },
+      {
+        id: 3,
+        title: "ArcGIS Image Server",
+        esri: "ArcGIS Image Server",
+        nvidia: "CUDA, Multi-GPU",
+        useCase: "Enterprise-scale raster inferencing across massive imagery datasets. Multiple GPUs work in parallel to process satellite and aerial imagery for classification and feature extraction at scale.",
+        status: "Production",
+        category: "Enterprise / Server",
+        location: { lat: 38.9072, lon: -77.0369 }, // DC
+        flow: [
+          { label: "Image Server", type: "esri" },
+          { label: "Raster Analytics", type: "esri" },
+          { label: "Multi-GPU CUDA", type: "nvidia" }
+        ]
+      },
+      {
+        id: 4,
+        title: "ArcGIS Notebook Server",
+        esri: "ArcGIS Notebook Server",
+        nvidia: "nvidia-docker 2.0, CUDA",
+        useCase: "GPU-accelerated Jupyter notebooks for geospatial data science. Containerized environments with NVIDIA runtime enable scalable, reproducible deep learning and spatial analytics workflows.",
+        status: "Production",
+        category: "Data Science",
+        location: { lat: 37.7749, lon: -122.4194 }, // SF
+        flow: [
+          { label: "Notebook Server", type: "esri" },
+          { label: "Jupyter", type: "esri" },
+          { label: "nvidia-docker", type: "nvidia" },
+          { label: "CUDA Runtime", type: "nvidia" }
+        ]
+      },
+      {
+        id: 5,
+        title: "ArcGIS Deep Learning Studio",
+        esri: "ArcGIS Deep Learning Studio",
+        nvidia: "CUDA GPUs",
+        useCase: "Dedicated environment for training data preparation and model management. Streamlines the workflow from labeling geospatial training samples to training, evaluating, and deploying deep learning models.",
+        status: "Production",
+        category: "AI / Deep Learning",
+        location: { lat: 33.8121, lon: -117.9190 }, // Anaheim
+        flow: [
+          { label: "DL Studio", type: "esri" },
+          { label: "Training Pipeline", type: "esri" },
+          { label: "CUDA GPUs", type: "nvidia" }
+        ]
+      },
+      {
+        id: 6,
+        title: "ArcGIS Living Atlas",
+        esri: "ArcGIS Living Atlas of the World",
+        nvidia: "NVIDIA GPUs (inference)",
+        useCase: "75+ pretrained geospatial deep learning models available out-of-the-box. These models cover building footprint extraction, land cover classification, object detection, and more — all optimized for GPU inference.",
+        status: "Production",
+        category: "AI / Deep Learning",
+        location: { lat: 34.0555, lon: -117.1825 }, // Redlands
+        flow: [
+          { label: "Living Atlas", type: "esri" },
+          { label: "Pretrained Models", type: "esri" },
+          { label: "GPU Inference", type: "nvidia" }
+        ]
+      },
+      {
+        id: 7,
+        title: "ArcGIS Pro (VDI)",
+        esri: "ArcGIS Pro",
+        nvidia: "NVIDIA vGPU, Quadro vDWS",
+        useCase: "Virtualized multi-user GIS workstations. NVIDIA vGPU divides physical GPU memory into multiple profiles so several VMs can share one GPU, enabling ArcGIS Pro on virtual desktop infrastructure across enterprise environments.",
+        status: "Production",
+        category: "Infrastructure",
+        location: { lat: 47.6062, lon: -122.3321 }, // Seattle
+        flow: [
+          { label: "ArcGIS Pro", type: "esri" },
+          { label: "VDI Platform", type: "esri" },
+          { label: "vGPU", type: "nvidia" },
+          { label: "Quadro vDWS", type: "nvidia" }
+        ]
+      },
+      {
+        id: 8,
+        title: "ArcGIS Pro on Cloud",
+        esri: "ArcGIS Pro",
+        nvidia: "T4, A10, L4 GPUs",
+        useCase: "AWS/Azure/Oracle cloud GIS workstations with GPU acceleration. One customer reduced processing of a raw dataset into a complete 3D representation from 5 months to just over 24 hours.",
+        status: "Production",
+        category: "Cloud",
+        location: { lat: 39.0438, lon: -77.4874 }, // Ashburn/VA (AWS)
+        flow: [
+          { label: "ArcGIS Pro", type: "esri" },
+          { label: "Cloud VM", type: "esri" },
+          { label: "T4 / A10 / L4", type: "nvidia" }
+        ]
+      },
+      {
+        id: 9,
+        title: "ArcGIS (3D Training)",
+        esri: "ArcGIS Pro, 3D GIS",
+        nvidia: "NVIDIA AI Enterprise, H100",
+        useCase: "Model training virtualization for 3D deep learning. 2 H100 GPUs deliver the equivalent performance of 8 V100 GPUs, dramatically accelerating 3D building model creation from aerial lidar data.",
+        status: "Production",
+        category: "AI / Deep Learning",
+        location: { lat: 25.7617, lon: -80.1918 }, // Miami (Miami-Dade project)
+        flow: [
+          { label: "3D GIS", type: "esri" },
+          { label: "LiDAR Models", type: "esri" },
+          { label: "AI Enterprise", type: "nvidia" },
+          { label: "H100 GPUs", type: "nvidia" }
+        ]
+      },
+      {
+        id: 10,
+        title: "ArcGIS Pro / Maps SDKs",
+        esri: "ArcGIS Pro, Maps SDKs",
+        nvidia: "GPU hardware acceleration",
+        useCase: "3D scene rendering, cartography, and WebGL-powered map visualization. GPU hardware acceleration powers smooth navigation of complex 3D city scenes and high-resolution basemap rendering.",
+        status: "Production",
+        category: "Visualization",
+        location: { lat: 40.7128, lon: -74.0060 }, // NYC
+        flow: [
+          { label: "ArcGIS Pro", type: "esri" },
+          { label: "Maps SDKs", type: "esri" },
+          { label: "GPU Rendering", type: "nvidia" },
+          { label: "WebGL", type: "nvidia" }
+        ]
+      },
+      {
+        id: 11,
+        title: "ArcGIS GeoEvent Server",
+        esri: "ArcGIS GeoEvent Server",
+        nvidia: "NVIDIA DeepStream SDK",
+        useCase: "Real-time video analytics for smart city applications. Camera feeds processed through DeepStream stream results into GeoEvent Server for live geospatial event processing — as deployed in the City of Raleigh.",
+        status: "Production",
+        category: "Real-Time / IoT",
+        location: { lat: 35.7796, lon: -78.6382 }, // Raleigh NC
+        flow: [
+          { label: "GeoEvent Server", type: "esri" },
+          { label: "Real-Time Feeds", type: "esri" },
+          { label: "DeepStream SDK", type: "nvidia" }
+        ]
+      },
+      {
+        id: 12,
+        title: "ArcGIS + Metropolis",
+        esri: "ArcGIS Platform, Dashboards",
+        nvidia: "DeepStream, VLMs",
+        useCase: "Smart city camera AI piped to GIS map visualization. NVIDIA Metropolis processes video feeds for vehicle, pedestrian, and cyclist detection, with results displayed on ArcGIS Dashboards for real-time traffic management.",
+        status: "Production",
+        category: "Smart Cities",
+        location: { lat: 35.7904, lon: -78.6350 }, // Raleigh
+        flow: [
+          { label: "ArcGIS Dashboards", type: "esri" },
+          { label: "ArcGIS Platform", type: "esri" },
+          { label: "Metropolis", type: "nvidia" },
+          { label: "DeepStream", type: "nvidia" },
+          { label: "VLMs", type: "nvidia" }
+        ]
+      },
+      {
+        id: 13,
+        title: "ArcGIS CityEngine",
+        esri: "ArcGIS CityEngine",
+        nvidia: "NVIDIA Omniverse (USD)",
+        useCase: "3D urban digital twins with procedural city generation. CityEngine exports models via OpenUSD into Omniverse for simulation, high-end visualization, and collaborative urban planning.",
+        status: "Transitioning",
+        category: "Digital Twins",
+        location: { lat: 47.3769, lon: 8.5417 }, // Zurich (CityEngine HQ)
+        flow: [
+          { label: "CityEngine", type: "esri" },
+          { label: "USD Export", type: "esri" },
+          { label: "Omniverse", type: "nvidia" },
+          { label: "OpenUSD", type: "nvidia" }
+        ]
+      },
+      {
+        id: 14,
+        title: "ArcGIS Maps SDKs for Game Engines",
+        esri: "ArcGIS Maps SDK for Unity/Unreal",
+        nvidia: "Unity/Unreal GPU rendering",
+        useCase: "Immersive geospatial experiences with XR support and RTX ray tracing. Real-world GIS data rendered in game engines for simulation, training, and visualization with photorealistic quality.",
+        status: "Production",
+        category: "Visualization",
+        location: { lat: 37.3861, lon: -122.0839 }, // Santa Clara (NVIDIA HQ)
+        flow: [
+          { label: "Maps SDK", type: "esri" },
+          { label: "GIS Data", type: "esri" },
+          { label: "Unity/Unreal", type: "nvidia" },
+          { label: "RTX Ray Tracing", type: "nvidia" }
+        ]
+      },
+      {
+        id: 15,
+        title: "ArcGIS + Earth-2",
+        esri: "ArcGIS Platform",
+        nvidia: "Earth-2 NIM, CorrDiff, FourCastNet",
+        useCase: "Climate modeling and weather forecasting at 500x faster than CPU-based approaches. NVIDIA Earth-2 AI models generate high-resolution weather predictions visualized through ArcGIS geospatial layers.",
+        status: "Emerging",
+        category: "Climate / Weather",
+        location: { lat: 59.9139, lon: 10.7522 }, // Oslo (climate research)
+        flow: [
+          { label: "ArcGIS Platform", type: "esri" },
+          { label: "Geo Visualization", type: "esri" },
+          { label: "Earth-2 NIM", type: "nvidia" },
+          { label: "FourCastNet", type: "nvidia" },
+          { label: "CorrDiff", type: "nvidia" }
+        ]
+      },
+      {
+        id: 16,
+        title: "Dell-NVIDIA-Esri",
+        esri: "ArcGIS Pro, CityEngine",
+        nvidia: "Dell hardware + NVIDIA GPUs",
+        useCase: "Joint enterprise GIS solution with certified, pre-configured Dell Precision workstations featuring NVIDIA RTX Professional GPUs optimized for ArcGIS workflows including AI, 3D, and Omniverse.",
+        status: "Active",
+        category: "Hardware / OEM",
+        location: { lat: 32.8998, lon: -97.0403 }, // Round Rock TX (Dell)
+        flow: [
+          { label: "ArcGIS Pro", type: "esri" },
+          { label: "CityEngine", type: "esri" },
+          { label: "RTX Pro GPUs", type: "nvidia" },
+          { label: "Dell Precision", type: "nvidia" }
+        ]
+      },
+      {
+        id: 17,
+        title: "ArcGIS arcpy / arcgis.learn",
+        esri: "arcpy, arcgis.learn",
+        nvidia: "Multi-GPU DataParallel",
+        useCase: "Distributed model training across multiple GPUs using PyTorch DataParallel. arcgis.learn provides high-level APIs for geospatial deep learning that automatically leverage multi-GPU setups for faster training.",
+        status: "Production",
+        category: "AI / Deep Learning",
+        location: { lat: 34.0259, lon: -117.3755 }, // Redlands
+        flow: [
+          { label: "arcgis.learn", type: "esri" },
+          { label: "arcpy", type: "esri" },
+          { label: "DataParallel", type: "nvidia" },
+          { label: "Multi-GPU", type: "nvidia" }
+        ]
+      },
+      {
+        id: 18,
+        title: "Esri + cuOpt",
+        esri: "ArcGIS OD Cost Matrix",
+        nvidia: "cuOpt",
+        useCase: "GPU-accelerated vehicle route optimization. Esri's OD Cost Matrix feeds into NVIDIA cuOpt for solving complex vehicle routing problems with constraints at unprecedented speed.",
+        status: "Informal",
+        category: "Logistics / Routing",
+        location: { lat: 37.3688, lon: -122.0363 }, // Santa Clara
+        flow: [
+          { label: "OD Cost Matrix", type: "esri" },
+          { label: "Network Analyst", type: "esri" },
+          { label: "cuOpt", type: "nvidia" },
+          { label: "GPU Solver", type: "nvidia" }
+        ]
+      },
+      {
+        id: 19,
+        title: "GTC Presentations",
+        esri: "Various Esri Products",
+        nvidia: "Various NVIDIA Technologies",
+        useCase: "Ongoing joint conference sessions covering deep learning, video analytics, patrol optimization, Gaussian splatting, and smart cities. Annual collaboration at NVIDIA's flagship AI conference since 2020.",
+        status: "Ongoing",
+        category: "Partnership",
+        location: { lat: 37.3308, lon: -121.8890 }, // San Jose Convention Center
+        flow: [
+          { label: "Esri Speakers", type: "esri" },
+          { label: "Joint Sessions", type: "esri" },
+          { label: "GTC Conference", type: "nvidia" }
+        ]
+      },
+      {
+        id: 20,
+        title: "NVIDIA RAPIDS cuSpatial",
+        esri: "Indirect (ecosystem interop)",
+        nvidia: "cuSpatial CUDA",
+        useCase: "GPU-accelerated vector geospatial operations: point-in-polygon, spatial joins, trajectory analysis. 10x–10,000x speedup over CPU. Ecosystem-adjacent — can feed data into/from ArcGIS workflows.",
+        status: "Ecosystem adjacent",
+        category: "Open Source",
+        location: { lat: 37.3541, lon: -121.9552 }, // Santa Clara
+        flow: [
+          { label: "ArcGIS Data", type: "esri" },
+          { label: "cuSpatial", type: "nvidia" },
+          { label: "RAPIDS", type: "nvidia" },
+          { label: "cuDF / cuML", type: "nvidia" }
+        ]
+      }
+    ];
+
+    // ──────────────────────────────────────────────
+    // STATUS → CSS class mapping
+    // ──────────────────────────────────────────────
+    function statusClass(status) {
+      const s = status.toLowerCase();
+      if (s.includes("production")) return "status-production";
+      if (s.includes("emerging")) return "status-emerging";
+      if (s.includes("transitioning")) return "status-transitioning";
+      if (s.includes("active")) return "status-active";
+      if (s.includes("informal")) return "status-informal";
+      if (s.includes("ongoing")) return "status-ongoing";
+      if (s.includes("ecosystem")) return "status-ecosystem";
+      return "status-production";
+    }
+
+    function statusColor(status) {
+      const s = status.toLowerCase();
+      if (s.includes("production")) return [118, 185, 0];
+      if (s.includes("emerging")) return [245, 166, 35];
+      if (s.includes("transitioning")) return [224, 124, 36];
+      if (s.includes("active")) return [79, 195, 247];
+      if (s.includes("informal")) return [171, 71, 188];
+      if (s.includes("ongoing")) return [120, 144, 156];
+      if (s.includes("ecosystem")) return [141, 110, 99];
+      return [118, 185, 0];
+    }
+
+    // ──────────────────────────────────────────────
+    // BUILD CARDS
+    // ──────────────────────────────────────────────
+    const cardsContainer = document.getElementById("cardsContainer");
+    let selectedId = null;
+
+    function renderCards(items) {
+      cardsContainer.innerHTML = "";
+      items.forEach(item => {
+        const card = document.createElement("div");
+        card.className = `integration-card ${item.id === selectedId ? "selected" : ""}`;
+        card.dataset.id = item.id;
+        const [r, g, b] = statusColor(item.status);
+        card.style.setProperty("--card-accent", `rgb(${r},${g},${b})`);
+        card.querySelector?.("::before")?.style?.setProperty("background", `rgb(${r},${g},${b})`);
+        card.innerHTML = `
+          <style>.integration-card[data-id="${item.id}"]::before { background: rgb(${r},${g},${b}); }</style>
+          <div class="card-header">
+            <span class="card-number">#${item.id}</span>
+            <span class="card-title">${item.title}</span>
+            <span class="card-status ${statusClass(item.status)}">${item.status}</span>
+          </div>
+          <div class="card-meta">
+            <div class="card-meta-row">
+              <span class="meta-label meta-esri">Esri</span>
+              <span class="meta-value">${item.esri}</span>
+            </div>
+            <div class="card-meta-row">
+              <span class="meta-label meta-nvidia">NVIDIA</span>
+              <span class="meta-value">${item.nvidia}</span>
+            </div>
+          </div>
+        `;
+        card.addEventListener("click", () => selectIntegration(item.id));
+        cardsContainer.appendChild(card);
+      });
+
+      document.getElementById("countBadge").textContent = `${items.length} Integration${items.length !== 1 ? "s" : ""}`;
+    }
+
+    // ──────────────────────────────────────────────
+    // DETAIL VIEW
+    // ──────────────────────────────────────────────
+    function showDetail(item) {
+      const [r, g, b] = statusColor(item.status);
+      const detailContent = document.getElementById("detailContent");
+
+      const flowHtml = item.flow.map((node, i) => {
+        const arrow = i < item.flow.length - 1 ? '<span class="arch-arrow">&rarr;</span>' : '';
+        return `<span class="arch-node ${node.type}-node">${node.label}</span>${arrow}`;
+      }).join("");
+
+      detailContent.innerHTML = `
+        <div class="detail-panel">
+          <div class="detail-hero">
+            <div class="detail-number">#${item.id}</div>
+            <h2>${item.title}</h2>
+            <span class="detail-status ${statusClass(item.status)}" style="background:rgba(${r},${g},${b},0.15);color:rgb(${r},${g},${b});">
+              ${item.status}
+            </span>
+          </div>
+          <div class="detail-body">
+            <div class="detail-section">
+              <h3>Category</h3>
+              <p>${item.category}</p>
+            </div>
+            <div class="detail-section">
+              <h3>Use Case</h3>
+              <p>${item.useCase}</p>
+            </div>
+            <div class="detail-section">
+              <h3>Esri Technologies</h3>
+              <div class="tech-tags">
+                ${item.esri.split(",").map(t => `<span class="tech-tag esri">${t.trim()}</span>`).join("")}
+              </div>
+            </div>
+            <div class="detail-section">
+              <h3>NVIDIA Technologies</h3>
+              <div class="tech-tags">
+                ${item.nvidia.split(",").map(t => `<span class="tech-tag nvidia">${t.trim()}</span>`).join("")}
+              </div>
+            </div>
+            <div class="detail-section">
+              <h3>Architecture Flow</h3>
+              <div class="arch-flow">${flowHtml}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // ──────────────────────────────────────────────
+    // SELECT integration
+    // ──────────────────────────────────────────────
+    function selectIntegration(id) {
+      selectedId = id;
+      const item = integrations.find(i => i.id === id);
+      if (!item) return;
+
+      // Update cards
+      document.querySelectorAll(".integration-card").forEach(c => {
+        c.classList.toggle("selected", parseInt(c.dataset.id) === id);
+      });
+
+      // Show detail
+      showDetail(item);
+
+      // Zoom map
+      if (window.mapView) {
+        window.mapView.goTo({
+          center: [item.location.lon, item.location.lat],
+          zoom: 6
+        }, { duration: 800 });
+
+        // Highlight graphic
+        if (window.graphicsLayer) {
+          window.graphicsLayer.graphics.forEach(g => {
+            const isSelected = g.attributes.id === id;
+            g.symbol = makeSymbol(
+              statusColor(g.attributes.status),
+              isSelected ? 16 : 10,
+              isSelected
+            );
+          });
+        }
+      }
+    }
+
+    // ──────────────────────────────────────────────
+    // FILTERING
+    // ──────────────────────────────────────────────
+    let currentFilter = "all";
+    let searchTerm = "";
+
+    function getFilteredItems() {
+      return integrations.filter(item => {
+        const matchesFilter = currentFilter === "all" ||
+          item.status.toLowerCase().includes(currentFilter);
+        const matchesSearch = searchTerm === "" ||
+          item.title.toLowerCase().includes(searchTerm) ||
+          item.esri.toLowerCase().includes(searchTerm) ||
+          item.nvidia.toLowerCase().includes(searchTerm) ||
+          item.useCase.toLowerCase().includes(searchTerm) ||
+          item.category.toLowerCase().includes(searchTerm);
+        return matchesFilter && matchesSearch;
+      });
+    }
+
+    function applyFilters() {
+      const items = getFilteredItems();
+      renderCards(items);
+
+      // Also filter map graphics
+      if (window.graphicsLayer) {
+        window.graphicsLayer.graphics.forEach(g => {
+          const visible = items.some(i => i.id === g.attributes.id);
+          g.visible = visible;
+        });
+      }
+    }
+
+    // Filter chips
+    document.getElementById("filterBar").addEventListener("click", (e) => {
+      if (e.target.classList.contains("filter-chip")) {
+        document.querySelectorAll(".filter-chip").forEach(c => c.classList.remove("active"));
+        e.target.classList.add("active");
+        currentFilter = e.target.dataset.filter;
+        applyFilters();
+      }
+    });
+
+    // Search
+    document.getElementById("searchInput").addEventListener("input", (e) => {
+      searchTerm = e.target.value.toLowerCase();
+      applyFilters();
+    });
+
+    // ──────────────────────────────────────────────
+    // KEYBOARD NAVIGATION
+    // ──────────────────────────────────────────────
+    document.addEventListener("keydown", (e) => {
+      const items = getFilteredItems();
+      if (!items.length) return;
+
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const currentIdx = items.findIndex(i => i.id === selectedId);
+        let nextIdx;
+        if (e.key === "ArrowDown") {
+          nextIdx = currentIdx < items.length - 1 ? currentIdx + 1 : 0;
+        } else {
+          nextIdx = currentIdx > 0 ? currentIdx - 1 : items.length - 1;
+        }
+        selectIntegration(items[nextIdx].id);
+
+        // Scroll card into view
+        const card = cardsContainer.querySelector(`[data-id="${items[nextIdx].id}"]`);
+        card?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+    });
+
+    // ──────────────────────────────────────────────
+    // MAP SETUP (ArcGIS Maps SDK 5.0)
+    // ──────────────────────────────────────────────
+    function makeSymbol(rgb, size = 10, selected = false) {
+      return {
+        type: "simple-marker",
+        color: [...rgb, 0.9],
+        size: size,
+        outline: {
+          color: selected ? [255, 255, 255, 1] : [...rgb, 0.4],
+          width: selected ? 3 : 2
+        }
+      };
+    }
+
+    async function initMap() {
+      const [Map, MapView, GraphicsLayer, Graphic, PopupTemplate] = await Promise.all([
+        import("https://js.arcgis.com/5.0/esri/Map.js").then(m => m.default).catch(() => null),
+        import("https://js.arcgis.com/5.0/esri/views/MapView.js").then(m => m.default).catch(() => null),
+        import("https://js.arcgis.com/5.0/esri/layers/GraphicsLayer.js").then(m => m.default).catch(() => null),
+        import("https://js.arcgis.com/5.0/esri/Graphic.js").then(m => m.default).catch(() => null),
+        import("https://js.arcgis.com/5.0/esri/PopupTemplate.js").then(m => m.default).catch(() => null)
+      ]);
+
+      // Fallback: use @arcgis/core style imports if ESM direct doesn't work
+      let MapClass = Map, MapViewClass = MapView, GraphicsLayerClass = GraphicsLayer, GraphicClass = Graphic;
+
+      if (!MapClass) {
+        // Try AMD-style require as fallback
+        await new Promise((resolve) => {
+          require([
+            "esri/Map",
+            "esri/views/MapView",
+            "esri/layers/GraphicsLayer",
+            "esri/Graphic"
+          ], (M, MV, GL, G) => {
+            MapClass = M;
+            MapViewClass = MV;
+            GraphicsLayerClass = GL;
+            GraphicClass = G;
+            resolve();
+          });
+        });
+      }
+
+      const graphicsLayer = new GraphicsLayerClass();
+      window.graphicsLayer = graphicsLayer;
+
+      const map = new MapClass({
+        basemap: "dark-gray-vector",
+        layers: [graphicsLayer]
+      });
+
+      const view = new MapViewClass({
+        container: "viewDiv",
+        map: map,
+        center: [-40, 35],
+        zoom: 3,
+        ui: { components: ["zoom", "compass"] },
+        popup: {
+          dockEnabled: false,
+          collapseEnabled: false
+        },
+        constraints: {
+          minZoom: 2
+        }
+      });
+
+      window.mapView = view;
+
+      // Add graphics for each integration
+      integrations.forEach(item => {
+        const rgb = statusColor(item.status);
+        const graphic = new GraphicClass({
+          geometry: {
+            type: "point",
+            longitude: item.location.lon,
+            latitude: item.location.lat
+          },
+          symbol: makeSymbol(rgb),
+          attributes: {
+            id: item.id,
+            title: item.title,
+            status: item.status,
+            category: item.category,
+            esri: item.esri,
+            nvidia: item.nvidia
+          },
+          popupTemplate: {
+            title: "#{id} {title}",
+            content: `
+              <div style="font-family: 'Avenir Next', sans-serif;">
+                <p><strong>Category:</strong> {category}</p>
+                <p><strong>Status:</strong> {status}</p>
+                <p><strong>Esri:</strong> {esri}</p>
+                <p><strong>NVIDIA:</strong> {nvidia}</p>
+              </div>
+            `
+          }
+        });
+        graphicsLayer.add(graphic);
+      });
+
+      // Click handler
+      view.on("click", async (event) => {
+        const response = await view.hitTest(event);
+        const result = response.results.find(r => r.graphic?.attributes?.id);
+        if (result) {
+          selectIntegration(result.graphic.attributes.id);
+          view.popup.close();
+        }
+      });
+
+      // Add a legend overlay
+      const legendDiv = document.createElement("div");
+      legendDiv.className = "map-overlay-legend";
+      legendDiv.innerHTML = `
+        <div class="legend-title">Status Legend</div>
+        <div class="legend-items">
+          <div class="legend-item"><span class="legend-dot" style="background:rgb(118,185,0)"></span> Production</div>
+          <div class="legend-item"><span class="legend-dot" style="background:rgb(79,195,247)"></span> Active</div>
+          <div class="legend-item"><span class="legend-dot" style="background:rgb(245,166,35)"></span> Emerging</div>
+          <div class="legend-item"><span class="legend-dot" style="background:rgb(224,124,36)"></span> Transitioning</div>
+          <div class="legend-item"><span class="legend-dot" style="background:rgb(171,71,188)"></span> Informal</div>
+          <div class="legend-item"><span class="legend-dot" style="background:rgb(120,144,156)"></span> Ongoing</div>
+          <div class="legend-item"><span class="legend-dot" style="background:rgb(141,110,99)"></span> Ecosystem</div>
+        </div>
+      `;
+      view.ui.add(legendDiv, "bottom-left");
+    }
+
+    // ──────────────────────────────────────────────
+    // INIT
+    // ──────────────────────────────────────────────
+    renderCards(integrations);
+    initMap();
+  </script>
+</body>
+</html>
